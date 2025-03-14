@@ -12,7 +12,6 @@ remove the ones you do not want to sell and then complete the sale.
 
 
 NOTES:
-requires modules 'selenium' and 'PyQt6' to be pip installed prior to running.
 seems to only work if you use chrome! (need chrome installed at least). if you get an error saying that it is unable to find a driver for chrome, open this link: https://storage.googleapis.com/chrome-for-testing-public/134.0.6998.35/win64/chrome-win64.zip and extract it to the folder where the code is. run the setup.exe and hopefully that fixes it
 technically according to mtgmates back-end notes, bot trawling is not allowed, but they havent seemed to block it at all - so use it at your own risk i guess?
 sometimes when logging in, the reCaptcha catches the bot. in my experience, just try it again and it more often than not, doesnt catch the bot.
