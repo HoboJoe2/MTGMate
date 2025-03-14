@@ -1,4 +1,3 @@
-
 from PyQt6.QtWidgets import QApplication, QMainWindow, QFileDialog, QMessageBox
 from PyQt6.QtCore import QThread, pyqtSignal, QMutex, QWaitCondition
 from PyQt6 import uic
@@ -64,6 +63,7 @@ class WorkerThread(QThread):
             By.XPATH, '/html/body/div[1]/form/div[2]/input')
         login_button.click()
         
+        sleep(1)
         search_box = driver.find_element(
             By.XPATH, "//input[contains(@class, 'react-autosuggest__input')]")
         
@@ -96,6 +96,8 @@ class WorkerThread(QThread):
         begin_time = time()
         first_card_added = False
         self.update_log_box("Buylist checking begun.")
+
+        buylist = [["Card Name", "Set Name", "Foil?", "Quantity", "Scryfall ID", "Colours"]]
         
         for i, card in enumerate(self.cards):
             try:
@@ -205,6 +207,14 @@ class WorkerThread(QThread):
                                         num_to_sell = card_quantity-self.spare_quantity
                                     else:
                                         num_to_sell = card[3]-self.spare_quantity
+
+                                    response = requests.get(f"https://api.scryfall.com/cards/{card[4]}")
+                                    if response.status_code == 200:
+                                        card_data = response.json()
+                                        color = card_data["colors"]
+                                        card.append(color)
+                                    buylist.append(card)
+                                    
                                     try:
                                         sell_button = driver.find_element(By.XPATH, f'/html/body/div/div[3]/div/div/div/div[3]/table/tbody/tr[{i}]/td[7]/div/div/button')
                                         sell_button.click()
@@ -219,6 +229,10 @@ class WorkerThread(QThread):
             
         self.update_log_box("\nBuylist adding complete.")
         driver.close()
+        with open("output.csv", mode="w", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerows(buylist)
+
             
 config = configparser.ConfigParser()
 
@@ -284,3 +298,4 @@ if __name__ == "__main__":
     main = MainWindow()
     main.show()
     app.exec()
+# %%
