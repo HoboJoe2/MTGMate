@@ -53,14 +53,11 @@ class WorkerThread(QThread):
         sleep(2)
 
         #enter login details
-        username_box = driver.find_element(
-            By.XPATH, '/html/body/div[1]/form/div[1]/div[1]/input')
+        username_box = driver.find_element(By.ID, "user_email") 
         username_box.send_keys(self.username)
-        password_box = driver.find_element(
-            By.XPATH, '/html/body/div[1]/form/div[1]/div[2]/input')
+        password_box = driver.find_element(By.ID, "user_password") 
         password_box.send_keys(self.password)
-        login_button = driver.find_element(
-            By.XPATH, '/html/body/div[1]/form/div[2]/input')
+        login_button = driver.find_element(By.NAME, "commit")
         login_button.click()
         
         sleep(1)
@@ -72,11 +69,10 @@ class WorkerThread(QThread):
         search_box.send_keys(Keys.RETURN)
 
         try:
-            rows_pp_box = driver.find_element(
-                By.XPATH, "/html/body/div/div[3]/div/div/div/table/tfoot/tr/td/div/div/div/div[2]/div")
+            rows_pp_box = driver.find_element(By.ID, "pagination-rows") 
             rows_pp_box.click()
-            rows_500 = driver.find_element(
-                By.XPATH, "/html/body/div[2]/div[3]/ul/li[3]")
+            rows_500 = driver.find_element(By.XPATH, "//ul[@id='pagination-menu-list']/li[@data-value='500']")
+            rows_500.is_displayed()
             rows_500.click()
         except:
             self.update_log_box('Could not increase rows per page, this may cause cards to be missed. Could be worth restarting')
@@ -95,6 +91,7 @@ class WorkerThread(QThread):
 
         begin_time = time()
         first_card_added = False
+        second_card_added = False
         self.update_log_box("Buylist checking begun.")
 
         buylist = [["Card Name", "Set Name", "Foil?", "Quantity", "Scryfall ID", "Colours"]]
@@ -111,17 +108,25 @@ class WorkerThread(QThread):
                 self.itemsPerSec.setText(str(np.round((i+1)/(time()-begin_time),2)) + " items per second.")
             except:
                 pass
-            
+
             try:
                 num_in_buylist = int(driver.find_element(By.XPATH, '/html/body/nav/div[1]/ul[1]/li[5]/div[1]/span').text)
             except:
                 if first_card_added == False:
                     num_in_buylist = 0
                 else:
-                    self.update_log_box('Unable to get the number of cards in buylist. Code will NOT automatically stop at 300 cards.')
+                    if second_card_added == True:
+                        self.update_log_box('Unable to get the number of cards in buylist. Code will NOT automatically stop at 300 cards.')
+                    else:
+                        second_card_added = True
                 
             if num_in_buylist >= 300:
-                self.update_log_box('Buylist maximum reached!')
+
+                with open("output.csv", mode="w", newline="") as file:
+                    writer = csv.writer(file)
+                    writer.writerows(buylist)
+
+                self.update_log_box('Buylist maximum reached! Output CSV Created.')
                 self.show_full_message.emit()
                 
                 self.mutex.lock()
@@ -138,92 +143,91 @@ class WorkerThread(QThread):
                 search_box.send_keys(Keys.RETURN)
             except:
                 self.update_log_box(f'Issue searching for {card[0]}. Card skipped.')
-            matches = []
-            i = 0
-            end = False
-            #while loop just runs until it cant find an extra line in the table by XPATHs
+
+            extra = False
+            scryfall_checked = False
+
             try:
-                while end == False:
-                    i += 1
+                table_body = driver.find_element(By.CLASS_NAME, "MuiTableBody-root")
+                rows = table_body.find_elements(By.TAG_NAME, "tr")
+                for row in rows:
+                    # Extract the text from the second and third cells (card name and set name)
+                    card_name = row.find_element(By.XPATH, ".//td[2]//span[@class='card-name']").text
+                    if '(' in card_name:
+                        extra = True
+                    card_set = row.find_element(By.XPATH, ".//td[2]//span[@class='set-name font-italic text-muted']").text
                     try:
-                        #gets the individuial card info from table
-                        matches.append([driver.find_element(
-                        By.XPATH, f'/html/body/div/div[3]/div/div/div/div[3]/table/tbody/tr[{i}]/td[2]').text, driver.find_element(
-                        By.XPATH, f'/html/body/div/div[3]/div/div/div/div[3]/table/tbody/tr[{i}]/td[4]').text.split(' ')[0], driver.find_element(
-                        By.XPATH, f'/html/body/div/div[3]/div/div/div/div[3]/table/tbody/tr[{i}]/td[5]').text[1:]])
+                        card_foil = row.find_element(By.XPATH, ".//td[2]//span[@class='badge badge-label']").text
                     except:
-                        end = True
+                        card_foil = "Normal"
+                    card_quantity = int(row.find_element(By.XPATH, ".//td[4]//div").text[0])
+                    card_price = float(row.find_element(By.XPATH, ".//td[5]//div").text[1:])
+
+                    if card_set == card[1]:
+                        if extra == True and scryfall_checked == False:
+                            try:
+                                response = requests.get(f"https://api.scryfall.com/cards/{card[4]}")
+                                if response.status_code == 200:
+                                    card_data = response.json()
+                                    
+                                    #check for borderless
+                                    if 'border_color' in card_data:
+                                        if card_data['border_color'] == 'borderless':
+                                            card[0] = card[0] + ' (Borderless)'
+                                    
+                                    #check for showcase
+                                    if 'frame_effects' in card_data:
+                                        if "showcase" in card_data['frame_effects']:
+                                            card[0] = card[0] + ' (Showcase)'
+                                            
+                                        if "extendedart" in card_data['frame_effects']:
+                                            card[0] = card[0] + ' (Extended Art)'
+                                    
+                                    #check for retro frame
+                                    if 'frame' in card_data:
+                                        if card_data['frame'] == '1997':
+                                            card[0] = card[0] + ' (Retro Frame)'
+                                scryfall_checked = True
+                            except:
+                                self.update_log_box(f'Issue when getting scryfall information for {card_name}. Card skipped.')
+                        
+                        if card_foil.lower() == card[2].lower():
+                            if card[0] == card_name:
+                                if card_quantity > 0:
+                                    if card[3] - self.spare_quantity > 0:
+                                        if card_quantity < card[3]-self.spare_quantity:
+                                            num_to_sell = card_quantity-self.spare_quantity
+                                        else:
+                                            num_to_sell = card[3]-self.spare_quantity
+
+                                        response = requests.get(f"https://api.scryfall.com/cards/{card[4]}")
+                                        if response.status_code == 200:
+                                            card_data = response.json()
+                                            color = card_data["colors"]
+                                            card.append(color)
+                                        buylist.append(card)
+                                        
+                                        try:
+                                            sell_button = row.find_element(By.XPATH, ".//button[@class='btn btn-dark']")
+                                            sell_button.click()
+                                            button_dropdown = driver.find_element(By.XPATH, "//div[contains(@class, 'MuiGrid-root MuiGrid-container MuiGrid-spacing-xs-1')]")
+                                            buttons = button_dropdown.find_elements(By.XPATH, ".//button[contains(@class, 'MuiButtonBase-root')]")
+                                            for button in buttons:
+                                                label = button.find_element(By.XPATH, ".//span[@class='MuiButton-label']").text
+                                                if label == str(num_to_sell):
+                                                    button.click()
+                                            self.update_log_box(f'{num_to_sell}x {card_name} from {card_set} added to buylist at {card_price}.')
+                                            first_card_added = True
+                                        except:
+                                            self.update_log_box(f'Issue when adding {card_name} to buylist. Card skipped.')
+
+                    print(f"Card Name: {card_name}, Set Name: {card_set}, Foil: {card_foil}, Quantity: {card_quantity}, Price: {card_price}")
             except:
                 self.update_log_box(f'Issue when getting buylist information for {card[0]}. Card skipped.')
-            #tidies up the card info scraped from the table
-            i = 0
-            extra = False
-            for match in matches:
-                if '(' in match[0]:
-                    extra = True
-            scryfall_checked = False
-            for match in matches:
-                i += 1
-                card_name, card_set = match[0].split('\n')
-                try:
-                    card_name, card_foil = card_name.split(' · ')
-                except:
-                    card_foil = 'Normal'
-                card_quantity = int(match[1])
-                card_price = float(match[2])
-                if card_set == card[1]:
-                    if extra == True and scryfall_checked == False:
-                        try:
-                            response = requests.get(f"https://api.scryfall.com/cards/{card[4]}")
-                            if response.status_code == 200:
-                                card_data = response.json()
-                                
-                                #check for borderless
-                                if 'border_color' in card_data:
-                                    if card_data['border_color'] == 'borderless':
-                                        card[0] = card[0] + ' (Borderless)'
-                                
-                                #check for showcase
-                                if 'frame_effects' in card_data:
-                                    if "showcase" in card_data['frame_effects']:
-                                        card[0] = card[0] + ' (Showcase)'
-                                        
-                                    if "extendedart" in card_data['frame_effects']:
-                                        card[0] = card[0] + ' (Extended Art)'
-                                
-                                #check for retro frame
-                                if 'frame' in card_data:
-                                    if card_data['frame'] == '1997':
-                                        card[0] = card[0] + ' (Retro Frame)'
-                            scryfall_checked = True
-                        except:
-                            self.update_log_box(f'Issue when getting scryfall information for {card_name}. Card skipped.')
-                    
-                    if card_foil.lower() == card[2].lower():
-                        if card[0] == card_name:
-                            if card_quantity > 0:
-                                if card[3] - self.spare_quantity > 0:
-                                    if card_quantity < card[3]-self.spare_quantity:
-                                        num_to_sell = card_quantity-self.spare_quantity
-                                    else:
-                                        num_to_sell = card[3]-self.spare_quantity
 
-                                    response = requests.get(f"https://api.scryfall.com/cards/{card[4]}")
-                                    if response.status_code == 200:
-                                        card_data = response.json()
-                                        color = card_data["colors"]
-                                        card.append(color)
-                                    buylist.append(card)
-                                    
-                                    try:
-                                        sell_button = driver.find_element(By.XPATH, f'/html/body/div/div[3]/div/div/div/div[3]/table/tbody/tr[{i}]/td[7]/div/div/button')
-                                        sell_button.click()
-                                        quantity_button = driver.find_element(By.XPATH, f'/html/body/div[2]/div[3]/div/div/div[{num_to_sell+1}]/div/button')
-                                        quantity_button.click()
-                                        self.update_log_box(f'{num_to_sell}x {card_name} from {card_set} added to buylist at {card_price}.')
-                                        first_card_added = True
-                                    except:
-                                        self.update_log_box(f'Issue when adding {card_name} to buylist. Card skipped.')
+
+
+                
             self.update_log_box(f"{card[0]} checked.")
             sleep(0.15)
             
