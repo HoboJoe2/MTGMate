@@ -7,7 +7,7 @@ if it gets this far then it should (*should*) be safe to leave it running - you 
 
 there is a progress bar to tell you how far through your collection it is, and info telling you how fast it is going.
 once it is done, you can open mtgmate in your normal browser and all the cards you supposedly have will be in the buylist cart, they should all be there unless you delete your cookies or use incognito mode or whatever.
-remove the ones you do not want to sell and then complete the sale.
+remove the ones you do not want to sell and then complete the sale. can compare with the output.csv that is generated.
 
 
 
