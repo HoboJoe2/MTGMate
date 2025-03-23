@@ -110,7 +110,7 @@ class WorkerThread(QThread):
                 break
             
             #updates progress bar
-            self.progress_update.emit(i/len(self.cards)*100)
+            self.progress_update.emit(int(((i+1)/len(self.cards))*100))
             try:
                 self.itemsPerSec.setText(str(np.round((i+1)/(time()-begin_time),2)) + " items per second.")
             except:
@@ -230,7 +230,7 @@ class WorkerThread(QThread):
                                                 label = button.find_element(By.XPATH, ".//span[@class='MuiButton-label']").text
                                                 if label == str(num_to_sell):
                                                     button.click()
-                                            self.update_log_box(f'{num_to_sell}x {card_name} from {card_set} added to buylist at {card_price}.')
+                                            self.update_log_box(f'{num_to_sell}x {card_name} from {card_set} added to buylist at ${card_price}.')
                                             first_card_added = True
                                         except:
                                             self.update_log_box(f'Issue when adding {card_name} to buylist. Card skipped.')
