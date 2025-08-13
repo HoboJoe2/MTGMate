@@ -32,6 +32,7 @@ class WorkerThread(QThread):
         self.collection = []
         self.cards = []
         self.log = []
+        self.ignorelist = []
 
     #code for updating the log box in the UI    
     def update_log_box(self, text):
@@ -50,6 +51,12 @@ class WorkerThread(QThread):
 
     #code that runs when worker thread is created    
     def run(self):
+        #generate ignorelist list
+        with open('ignorelist.txt', 'r') as file:
+            for line in file:
+                line = line.strip().lower()
+                self.ignorelist.append(line)
+
         #opens MTGMate site in chrome
         driver = webdriver.Chrome()
         driver.get("https://www.mtgmate.com.au/cards/buylist_search")
@@ -101,6 +108,13 @@ class WorkerThread(QThread):
         
         #begin searching cards 1 by 1
         for i, card in enumerate(self.cards):
+            #skip card if it is in the ignorelist
+            try:
+                if card[0].lower() in self.ignorelist:
+                    self.update_log_box(f'Skipping {card[0]} as it is in the ignorelist.')
+                    continue
+            except:
+                self.update_log_box(f'Error checking ignorelist for {card[0]}. Skipping.')
 
             #checks to see if window is still open
             try:
